@@ -34,8 +34,11 @@ jobs:
       - name: Install system dependencies
         run: |
           brew update
-          brew install bison cmake libb2 nasm ninja yasm
+          brew install autoconf automake autoconf-archive bison cmake libb2 nasm ninja yasm
           echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+          ninja --version
+          autoconf --version
+          automake --version
 
       - name: Cache vcpkg binary packages
         uses: actions/cache@v4
