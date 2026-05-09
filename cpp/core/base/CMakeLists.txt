@@ -45,6 +45,15 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(cocos2dx CONFIG REQUIRED)
 
+if(APPLE)
+    find_file(HOMEBREW_B2_LIBRARY
+        NAMES libb2.a
+        PATHS /usr/local/opt/libb2/lib /opt/homebrew/opt/libb2/lib
+        NO_DEFAULT_PATH
+    )
+    find_package(LibXml2 REQUIRED)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     uchardet::libuchardet
     unrar::unrar
@@ -55,3 +64,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
     cocos2dx::cocos2d
 )
+
+if(APPLE AND HOMEBREW_B2_LIBRARY)
+    target_link_libraries(${PROJECT_NAME} PRIVATE "${HOMEBREW_B2_LIBRARY}")
+endif()
+
+if(APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBXML2_LIBRARIES})
+endif()

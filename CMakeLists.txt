@@ -27,6 +27,21 @@ set(APP_NAME krkr2)
 
 project(${APP_NAME})
 
+if(MACOS AND DEFINED VCPKG_TARGET_TRIPLET)
+    set(VCPKG_INCLUDE_DIR "${CMAKE_BINARY_DIR}/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/include")
+    set(FFMPEG_INCLUDE_PRIORITY_DIR "${CMAKE_BINARY_DIR}/ffmpeg_include_priority")
+    file(REMOVE_RECURSE "${FFMPEG_INCLUDE_PRIORITY_DIR}")
+    file(MAKE_DIRECTORY "${FFMPEG_INCLUDE_PRIORITY_DIR}")
+    foreach(FFMPEG_INCLUDE_SUBDIR libavcodec libavfilter libavformat libavutil libswresample libswscale)
+        file(CREATE_LINK
+            "${VCPKG_INCLUDE_DIR}/${FFMPEG_INCLUDE_SUBDIR}"
+            "${FFMPEG_INCLUDE_PRIORITY_DIR}/${FFMPEG_INCLUDE_SUBDIR}"
+            SYMBOLIC
+        )
+    endforeach()
+    include_directories(BEFORE "${FFMPEG_INCLUDE_PRIORITY_DIR}")
+endif()
+
 option(ENABLE_TESTS "enable tests execute build(exclude android)" ON)
 option(BUILD_TOOLS "build tools execute build(exclude android ios)" ON)
 

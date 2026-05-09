@@ -1,0 +1,114 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  VCPKG_INSTALL_OPTIONS: "--debug"
+  CMAKE_BUILD_PARALLEL_LEVEL: 3
+
+jobs:
+  build-macos:
+    name: Build macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            triplet: x64-osx
+            runner: macos-13
+          - arch: arm64
+            triplet: arm64-osx
+            runner: macos-14
+    runs-on: ${{ matrix.runner }}
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/.act/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.vcpkg-cache,readwrite
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          brew update
+          brew install bison cmake libb2 nasm ninja yasm
+          echo "$(brew --prefix bison)/bin" >> "$GITHUB_PATH"
+
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-macos-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg/ports/**', 'vcpkg/triplets/**') }}
+          restore-keys: |
+            vcpkg-macos-${{ matrix.triplet }}-
+
+      - name: Setup vcpkg
+        run: |
+          mkdir -p .vcpkg-cache
+          if [ ! -d "$VCPKG_ROOT" ]; then
+            git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          fi
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh"
+
+      - name: Configure
+        run: |
+          cmake --preset="MacOS Release Config" \
+            -DENABLE_TESTS=OFF \
+            -DBUILD_TOOLS=OFF \
+            -DVCPKG_TARGET_TRIPLET="${{ matrix.triplet }}" \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.arch }}" \
+            -DBISON_EXECUTABLE="$(brew --prefix bison)/bin/bison"
+
+      - name: Build
+        run: cmake --build --preset="MacOS Release Build"
+
+      - name: Package app
+        run: |
+          APP="out/macos/release/bin/krkr2/krkr2.app"
+          test -d "$APP"
+          lipo -info "$APP/Contents/MacOS/krkr2"
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "artifacts/krkr2-${{ matrix.arch }}.app.zip"
+
+      - name: Upload architecture artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: krkr2-macos-${{ matrix.arch }}
+          path: artifacts/krkr2-${{ matrix.arch }}.app.zip
+          if-no-files-found: error
+
+  package-universal2:
+    name: Package macOS universal2
+    needs: build-macos
+    runs-on: macos-14
+    steps:
+      - name: Download architecture artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Merge app executables
+        run: |
+          mkdir -p work/x86_64 work/arm64 dist
+          ditto -x -k artifacts/krkr2-macos-x86_64/krkr2-x86_64.app.zip work/x86_64
+          ditto -x -k artifacts/krkr2-macos-arm64/krkr2-arm64.app.zip work/arm64
+
+          cp -R work/arm64/krkr2.app dist/krkr2.app
+          lipo -create \
+            work/x86_64/krkr2.app/Contents/MacOS/krkr2 \
+            work/arm64/krkr2.app/Contents/MacOS/krkr2 \
+            -output dist/krkr2.app/Contents/MacOS/krkr2
+
+          lipo -info dist/krkr2.app/Contents/MacOS/krkr2
+          codesign --force --deep --sign - dist/krkr2.app
+          ditto -c -k --sequesterRsrc --keepParent dist/krkr2.app krkr2-macos-universal2.app.zip
+
+      - name: Upload universal2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: krkr2-macos-universal2
+          path: krkr2-macos-universal2.app.zip
+          if-no-files-found: error

@@ -126,9 +126,21 @@ find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(oniguruma CONFIG REQUIRED)
 
+if(APPLE)
+    find_file(HOMEBREW_FMT_LIBRARY
+        NAMES libfmt.a
+        PATHS /usr/local/opt/fmt/lib /opt/homebrew/opt/fmt/lib
+        NO_DEFAULT_PATH
+    )
+endif()
+
 target_link_libraries(${PROJECT_NAME} PUBLIC
     Boost::locale
     fmt::fmt
     spdlog::spdlog
     oniguruma::onig
 )
+
+if(APPLE AND HOMEBREW_FMT_LIBRARY)
+    target_link_libraries(${PROJECT_NAME} PUBLIC "${HOMEBREW_FMT_LIBRARY}")
+endif()
